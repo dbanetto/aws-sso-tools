@@ -1,9 +1,16 @@
+function _aws_list_profiles {
+    cat ~/.aws/config | grep '^\[' | sed -e 's/profile *//' | sed -r 's/\[(.*)\]/\1/'
+}
+
 function aws_sso_login {
     local profile="${1:-default}"
     
     # check if profile exists
-    if [ "$(cat ~/.aws/config | grep "profile" | grep "\[profile ${profile}\]" | wc -l)" != '1' ] ; then
-        echo "Error: Profile now found"
+    if _aws_list_profiles | grep "^${profile}$" > /dev/null ; then
+        # pass - successful
+        true
+    else
+        echo "Error: Profile ($profile) not found"
         return 1
     fi
 
@@ -22,13 +29,18 @@ function aws_sso_login {
 }
 
 ## Completions
-# zsh use `autoload -U +X bashcompinit && bashcompinit` or PR a working completion
+# zsh use must have `autoload -U +X compinit && compinit` enabled
 
-if type complete > /dev/null; then
+if type compdef 2> /dev/null 1> /dev/null; then
+    _aws_sso_login() {
+        _arguments -C "1: :($(_aws_list_profiles))"
+    }
+    compdef _aws_sso_login aws_sso_login
+elif type complete 2> /dev/null 1> /dev/null; then
     _aws_sso_login() {
         local cur opts
         cur="${COMP_WORDS[COMP_CWORD]}"
-        opts="$(cat ~/.aws/config | grep "profile" | sed -r 's/^\[profile (.*)]$/\1/' | paste -sd ' ')"
+        opts="$(_aws_list_profiles | paste -s -d ' ' -)"
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
     }
     complete -F _aws_sso_login aws_sso_login
